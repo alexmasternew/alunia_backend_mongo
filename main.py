@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -52,6 +51,11 @@ class PyObjectId(ObjectId):
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid objectid")
         return ObjectId(v)
+
+# Rota raiz para testar se o backend está ativo
+@app.get("/")
+def root():
+    return {"status": "API AluniA com MongoDB no ar!"}
 
 # Rotas principais
 @app.get("/empresas")
