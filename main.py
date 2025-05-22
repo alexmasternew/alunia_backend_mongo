@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -8,13 +8,13 @@ import os
 
 app = FastAPI()
 
-# Conexão com o MongoDB
+# Conexão com MongoDB
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
 client = MongoClient(MONGO_URL)
 db = client["alunia"]
 empresas_collection = db["empresas"]
 
-# Habilitar CORS
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Models
+# Modelos
 class Horario(BaseModel):
     dia: str
     inicio: str
@@ -40,31 +40,43 @@ class Empresa(BaseModel):
     mensagem_fora_horario: Optional[str] = ""
     horario_funcionamento: Optional[List[Horario]] = []
 
-# Utils
-class PyObjectId(ObjectId):
-    @classmethod
-    def get_validators(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid objectid")
-        return ObjectId(v)
-
-# Rota raiz para testar se o backend está ativo
+# Teste
 @app.get("/")
 def root():
     return {"status": "API AluniA com MongoDB no ar!"}
 
-# Rotas principais
+# Login (por empresa)
+@app.post("/login")
+def login_empresa(login: dict = Body(...)):
+    email = login.get("email")
+    senha = login.get("senha")
+
+    empresa = empresas_collection.find_one({"email": email, "senha": senha})
+    if not empresa:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+    return {
+        "message": "Login OK",
+        "empresa": {
+            "id": str(empresa["_id"]),
+            "nome": empresa["nome"],
+            "email": empresa["email"],
+            "numero": empresa["numero"],
+            "plano": empresa["plano"],
+            "senha": empresa["senha"]
+        }
+    }
+
+# Listar empresas
 @app.get("/empresas")
 def listar_empresas():
-    empresas = list(empresas_collection.find({}, {"senha": 0}))
+    empresas = list(empresas_collection.find({}))
     for e in empresas:
-        e["_id"] = str(e["_id"])
+        e["id"] = str(e["_id"])
+        del e["_id"]
     return empresas
 
+# Cadastrar empresa
 @app.post("/empresas")
 def criar_empresa(dados: Empresa):
     if empresas_collection.find_one({"email": dados.email}):
@@ -72,24 +84,13 @@ def criar_empresa(dados: Empresa):
     nova = empresas_collection.insert_one(dados.dict())
     return {"id": str(nova.inserted_id)}
 
-@app.get("/empresas/{email}")
-def buscar_empresa(email: str):
-    empresa = empresas_collection.find_one({"email": email})
-    if not empresa:
+# Resetar senha
+@app.patch("/empresas/{empresa_id}/reset")
+def resetar_senha(empresa_id: str):
+    result = empresas_collection.update_one(
+        {"_id": ObjectId(empresa_id)},
+        {"$set": {"senha": "alunia@123"}}
+    )
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
-    empresa["_id"] = str(empresa["_id"])
-    return empresa
-
-@app.put("/empresas/{email}")
-def atualizar_empresa(email: str, dados: Empresa):
-    resultado = empresas_collection.update_one({"email": email}, {"$set": dados.dict()})
-    if resultado.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Empresa não encontrada")
-    return {"msg": "Atualizado com sucesso"}
-
-@app.delete("/empresas/{email}")
-def remover_empresa(email: str):
-    resultado = empresas_collection.delete_one({"email": email})
-    if resultado.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Empresa não encontrada")
-    return {"msg": "Empresa removida"}
+    return {"message": "Senha resetada para 'alunia@123'"}
