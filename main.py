@@ -39,6 +39,10 @@ class Empresa(BaseModel):
     mensagem_inicial: Optional[str] = ""
     mensagem_fora_horario: Optional[str] = ""
     horario_funcionamento: Optional[List[Horario]] = []
+    tempo_resposta: Optional[str] = "2 horas"
+    tempo_ativado: Optional[bool] = True
+    opcoes_mensagem: Optional[List[str]] = []
+    links_externos: Optional[List[str]] = []
 
 # Teste
 @app.get("/")
@@ -94,3 +98,14 @@ def resetar_senha(empresa_id: str):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
     return {"message": "Senha resetada para 'alunia@123'"}
+
+# Atualizar empresa
+@app.put("/empresas/{email}")
+def atualizar_empresa(email: str, dados: Empresa):
+    empresa = empresas_collection.find_one({"email": email})
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+    atualizacao = {k: v for k, v in dados.dict().items() if v is not None}
+    empresas_collection.update_one({"email": email}, {"$set": atualizacao})
+    return {"message": "Empresa atualizada com sucesso"}
