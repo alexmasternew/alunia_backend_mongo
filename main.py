@@ -49,7 +49,7 @@ class Empresa(BaseModel):
 def root():
     return {"status": "API AluniA com MongoDB no ar!"}
 
-# Login (por empresa)
+# Login
 @app.post("/login")
 def login_empresa(login: dict = Body(...)):
     email = login.get("email")
@@ -71,7 +71,7 @@ def login_empresa(login: dict = Body(...)):
         }
     }
 
-# Listar empresas
+# Listar todas empresas
 @app.get("/empresas")
 def listar_empresas():
     empresas = list(empresas_collection.find({}))
@@ -80,13 +80,34 @@ def listar_empresas():
         del e["_id"]
     return empresas
 
-# Cadastrar empresa
+# Buscar uma empresa específica
+@app.get("/empresas/{email}")
+def buscar_empresa(email: str):
+    empresa = empresas_collection.find_one({"email": email})
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+    empresa["id"] = str(empresa["_id"])
+    del empresa["_id"]
+    return empresa
+
+# Cadastrar nova empresa
 @app.post("/empresas")
 def criar_empresa(dados: Empresa):
     if empresas_collection.find_one({"email": dados.email}):
         raise HTTPException(status_code=400, detail="Empresa já cadastrada")
     nova = empresas_collection.insert_one(dados.dict())
     return {"id": str(nova.inserted_id)}
+
+# Atualizar dados da empresa
+@app.put("/empresas/{email}")
+def atualizar_empresa(email: str, dados: dict = Body(...)):
+    empresa = empresas_collection.find_one({"email": email})
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+    empresas_collection.update_one({"email": email}, {"$set": dados})
+    return {"message": "Empresa atualizada com sucesso"}
 
 # Resetar senha
 @app.patch("/empresas/{empresa_id}/reset")
@@ -98,13 +119,3 @@ def resetar_senha(empresa_id: str):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
     return {"message": "Senha resetada para 'alunia@123'"}
-
-# Atualizar empresa (agora aceita atualizações parciais)
-@app.put("/empresas/{email}")
-def atualizar_empresa(email: str, dados: dict = Body(...)):
-    empresa = empresas_collection.find_one({"email": email})
-    if not empresa:
-        raise HTTPException(status_code=404, detail="Empresa não encontrada")
-
-    empresas_collection.update_one({"email": email}, {"$set": dados})
-    return {"message": "Empresa atualizada com sucesso"}
