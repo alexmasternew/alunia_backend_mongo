@@ -99,13 +99,12 @@ def resetar_senha(empresa_id: str):
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
     return {"message": "Senha resetada para 'alunia@123'"}
 
-# Atualizar empresa
+# Atualizar empresa (agora aceita atualizações parciais)
 @app.put("/empresas/{email}")
-def atualizar_empresa(email: str, dados: Empresa):
+def atualizar_empresa(email: str, dados: dict = Body(...)):
     empresa = empresas_collection.find_one({"email": email})
     if not empresa:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-    atualizacao = {k: v for k, v in dados.dict().items() if v is not None}
-    empresas_collection.update_one({"email": email}, {"$set": atualizacao})
+    empresas_collection.update_one({"email": email}, {"$set": dados})
     return {"message": "Empresa atualizada com sucesso"}
